@@ -302,6 +302,14 @@ final class AppModel {
         installer.openApprovalSettings()
     }
 
+    /// Re-opens the setup assistant from the beginning, without touching any
+    /// existing configuration. Used for the explicit "Run Setup Again" action.
+    func restartOnboarding() {
+        onboardingStartStep = 0
+        hasAutoPresentedOnboarding = true
+        showingOnboarding = true
+    }
+
     func createInstallLink() async -> InstallLink? {
         let response = await send(.createInstallLink)
         if case .installLink(let link) = response { return link }

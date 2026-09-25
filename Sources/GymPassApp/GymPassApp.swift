@@ -28,6 +28,9 @@ struct GymPassApp: App {
                 Button("Diagnostics") { model.selectedDestination = .diagnostics }
                     .keyboardShortcut("4", modifiers: .command)
                 Divider()
+                Button("Run Setup Again…") { model.restartOnboarding() }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
                 Button("Refresh Access Code") {
                     Task { await model.refreshQR() }
                 }

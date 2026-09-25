@@ -122,6 +122,8 @@ A follow-up audit of the SwiftUI layer fixed:
   background-service toggle reflects approval state; certificate and credential
   errors show inline in their sheets.
 - Dead code removed; icon-only buttons labelled; `⌘1`–`⌘4` shortcuts added.
+- Onboarding can be re-run at any time from **Settings → Advanced → Run Setup
+  Again…**, the menu bar, or ⌘⇧S; it never touches existing configuration.
 
 Verified with packaged-app window captures at 760 and 1180 points.
 
