@@ -8,7 +8,10 @@ struct GymPassApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup(id: "main") {
+        // A single-window utility: `openWindow(id:)` focuses the existing
+        // window instead of creating another one, so re-running setup (or
+        // choosing "Open GymPass") can never produce duplicate windows/sheets.
+        Window("GymPass", id: "main") {
             RootView()
                 .environment(model)
                 .task { model.start() }
@@ -71,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -100,6 +104,7 @@ struct RootView: View {
             }
         }
         .task {
+            model.openMainWindow = { openWindow(id: "main") }
             if !model.hasAutoPresentedOnboarding, model.status == nil {
                 await model.refreshAll()
             }

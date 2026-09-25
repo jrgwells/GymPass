@@ -302,7 +302,6 @@ private struct ConnectivitySettings: View {
 
 private struct AdvancedSettings: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openWindow) private var openWindow
     @State private var showingResetRegistrations = false
     @State private var showingResetPass = false
 
@@ -310,7 +309,6 @@ private struct AdvancedSettings: View {
         Form {
             Section("Setup") {
                 Button("Run Setup Again…") {
-                    openWindow(id: "main")
                     model.restartOnboarding()
                 }
                 Text("Re-opens the setup assistant from the beginning. Your existing configuration and pass are kept.")

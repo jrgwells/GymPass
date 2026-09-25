@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import AppKit
 import GymPassCore
 import GymPassShared
 
@@ -56,6 +57,10 @@ final class AppModel {
     private var bannerTask: Task<Void, Never>?
     private var lastPreviewRevision: Int?
     private let installer: AgentInstaller
+
+    /// Set by the root view so any entry point can bring the single main window
+    /// forward without creating another one.
+    var openMainWindow: (() -> Void)?
 
     struct BannerMessage: Identifiable {
         let id = UUID()
@@ -305,6 +310,8 @@ final class AppModel {
     /// Re-opens the setup assistant from the beginning, without touching any
     /// existing configuration. Used for the explicit "Run Setup Again" action.
     func restartOnboarding() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openMainWindow?()
         onboardingStartStep = 0
         hasAutoPresentedOnboarding = true
         showingOnboarding = true

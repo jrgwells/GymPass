@@ -44,8 +44,6 @@ struct MenuBarView: View {
             openSettings()
         }
         Button("Run Setup…") {
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            openWindow(id: "main")
             model.restartOnboarding()
         }
 
