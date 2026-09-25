@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+.DS_Store
+DerivedData/
+build/
+dist/
+*.p12
+*.cer
+*.pem
+!Tests/Fixtures/*.p12
