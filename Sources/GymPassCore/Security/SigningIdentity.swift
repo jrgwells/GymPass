@@ -32,7 +32,7 @@ public struct SigningIdentityInfo: Sendable, Equatable {
 
     public var kind: SigningStatus.Kind {
         guard hasPrivateKey else { return .missingPrivateKey }
-        guard let expiresAt else { return .notConfigured }
+        guard let expiresAt else { return .valid }
         if expiresAt < Date() { return .expired }
         if expiresAt < Date().addingTimeInterval(60 * 60 * 24 * 30) { return .expiringSoon }
         return .valid
