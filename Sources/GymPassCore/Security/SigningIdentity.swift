@@ -96,7 +96,7 @@ public actor SigningIdentityStore {
               let identityRef = first[kSecImportItemIdentity as String] else {
             throw GymPassError.signingFailed("The imported file did not contain a usable identity.")
         }
-        let identity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        let identity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
 
         var certificate: SecCertificate?
         SecIdentityCopyCertificate(identity, &certificate)

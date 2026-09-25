@@ -10,14 +10,17 @@ public enum ZipArchiver {
 
     /// Creates an in-memory zip with every file at the archive root.
     public static func zip(files: [String: Data]) throws -> Data {
-        guard let archive = Archive(accessMode: .create) else {
+        let archive: Archive
+        do {
+            archive = try Archive(data: Data(), accessMode: .create)
+        } catch {
             throw ZipError.createFailed("Could not create in-memory archive")
         }
         for (name, data) in files.sorted(by: { $0.key < $1.key }) {
             let entryData = data
-            let provider: (Int, Int) throws -> Data = { position, size in
-                let start = position
-                let end = min(position + size, entryData.count)
+            let provider: Provider = { position, size in
+                let start = Int(position)
+                let end = min(start + size, entryData.count)
                 guard start <= end, end <= entryData.count else {
                     throw ZipError.createFailed("Invalid buffer range while writing \(name)")
                 }
@@ -27,7 +30,7 @@ public enum ZipArchiver {
                 try archive.addEntry(
                     with: name,
                     type: .file,
-                    uncompressedSize: UInt32(entryData.count),
+                    uncompressedSize: Int64(entryData.count),
                     compressionMethod: .deflate,
                     provider: provider
                 )
@@ -42,7 +45,10 @@ public enum ZipArchiver {
     }
 
     public static func unzip(_ data: Data) throws -> [String: Data] {
-        guard let archive = Archive(data: data, accessMode: .read) else {
+        let archive: Archive
+        do {
+            archive = try Archive(data: data, accessMode: .read)
+        } catch {
             throw ZipError.readFailed("Could not open archive")
         }
         var files: [String: Data] = [:]
@@ -58,7 +64,10 @@ public enum ZipArchiver {
     }
 
     public static func entryNames(_ data: Data) throws -> [String] {
-        guard let archive = Archive(data: data, accessMode: .read) else {
+        let archive: Archive
+        do {
+            archive = try Archive(data: data, accessMode: .read)
+        } catch {
             throw ZipError.readFailed("Could not open archive")
         }
         return archive.map(\.path).sorted()

@@ -381,8 +381,7 @@ public actor DatabaseManager {
 
     public func insertActivity(_ record: ActivityRecord) async throws {
         try await pool.write { db in
-            var copy = record
-            try copy.insert(db)
+            try record.insert(db)
         }
     }
 

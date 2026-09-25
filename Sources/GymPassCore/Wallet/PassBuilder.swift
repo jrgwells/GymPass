@@ -136,7 +136,7 @@ public enum PassJSON {
 public enum PassBuilder {
     /// Builds `pass.json` for a generic pass.
     public static func document(_ inputs: PassBuildInputs) -> PassDocument {
-        var secondary: [PassField] = [
+        let secondary: [PassField] = [
             PassField(key: "gym", label: "HOME GYM", value: inputs.appearance.gymLabel, textAlignment: "PKTextAlignmentLeft"),
         ]
 

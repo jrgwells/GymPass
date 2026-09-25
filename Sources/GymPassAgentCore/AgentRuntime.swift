@@ -219,7 +219,7 @@ public actor AgentRuntime {
         await tunnel?.stop()
         await walletServer?.stop()
         await controlServer?.stop()
-        await powerAssertion.disable()
+        powerAssertion.disable()
         try? FileManager.default.removeItem(at: AppPaths.controlEndpointURL())
         await database.close()
     }
