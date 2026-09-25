@@ -75,10 +75,10 @@ public enum CertificateInspector {
 }
 
 public actor SigningIdentityStore {
-    private let keychain: KeychainStore
+    private let secrets: any SecretStore
 
-    public init(keychain: KeychainStore) {
-        self.keychain = keychain
+    public init(secrets: any SecretStore = KeychainStore()) {
+        self.secrets = secrets
     }
 
     public func importPKCS12(_ data: Data, password: String) async throws -> SigningIdentityInfo {
@@ -108,15 +108,15 @@ public actor SigningIdentityStore {
         let fingerprint = CertificateInspector.fingerprint(of: certificate)
         let hasPrivateKey = Self.identityHasPrivateKey(identity)
 
-        try await keychain.set(fingerprint, for: KeychainStore.Key.signingFingerprint.rawValue)
+        try await secrets.set(fingerprint, for: KeychainStore.Key.signingFingerprint.rawValue)
         if let passType = details.passTypeIdentifier {
-            try await keychain.set(passType, for: KeychainStore.Key.signingPassType.rawValue)
+            try await secrets.set(passType, for: KeychainStore.Key.signingPassType.rawValue)
         }
         if let team = details.teamIdentifier {
-            try await keychain.set(team, for: KeychainStore.Key.signingTeam.rawValue)
+            try await secrets.set(team, for: KeychainStore.Key.signingTeam.rawValue)
         }
         if let expiry = details.expiresAt {
-            try await keychain.set(GymPassDate.iso8601(expiry), for: KeychainStore.Key.signingExpiry.rawValue)
+            try await secrets.set(GymPassDate.iso8601(expiry), for: KeychainStore.Key.signingExpiry.rawValue)
         }
 
         return SigningIdentityInfo(
@@ -131,10 +131,10 @@ public actor SigningIdentityStore {
     }
 
     public func clear() async throws {
-        try? await keychain.delete(KeychainStore.Key.signingFingerprint.rawValue)
-        try? await keychain.delete(KeychainStore.Key.signingPassType.rawValue)
-        try? await keychain.delete(KeychainStore.Key.signingTeam.rawValue)
-        try? await keychain.delete(KeychainStore.Key.signingExpiry.rawValue)
+        try? await secrets.delete(KeychainStore.Key.signingFingerprint.rawValue)
+        try? await secrets.delete(KeychainStore.Key.signingPassType.rawValue)
+        try? await secrets.delete(KeychainStore.Key.signingTeam.rawValue)
+        try? await secrets.delete(KeychainStore.Key.signingExpiry.rawValue)
         if let box = try await loadIdentity() {
             var certificate: SecCertificate?
             SecIdentityCopyCertificate(box.identity, &certificate)
@@ -173,7 +173,7 @@ public actor SigningIdentityStore {
     }
 
     public func loadIdentity() async throws -> IdentityBox? {
-        guard let fingerprint = try await keychain.getString(KeychainStore.Key.signingFingerprint.rawValue) else {
+        guard let fingerprint = try await secrets.getString(KeychainStore.Key.signingFingerprint.rawValue) else {
             return nil
         }
         let query: [String: Any] = [

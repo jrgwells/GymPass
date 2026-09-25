@@ -55,7 +55,7 @@ public actor MockPureGymClient: PureGymAPI {
         generation += 1
         let now = Date()
         let bucket = Int(now.timeIntervalSince1970 / changeEverySeconds)
-        let code = "exerp:checkin:demo-\(bucket)-\(generation)"
+        let code = "exerp:checkin:demo-\(bucket)"
         return PureGymQRCode(
             code: code,
             refreshAt: now.addingTimeInterval(changeEverySeconds),

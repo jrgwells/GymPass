@@ -73,7 +73,11 @@ public actor WalletHTTPServer {
 
         router.get("/health") { _, _ -> Response in
             await stats.record()
-            return Self.json(["status": "ok"])
+            return Response(
+                status: .ok,
+                headers: [.contentType: "application/json"],
+                body: ResponseBody(byteBuffer: ByteBuffer(string: "{\"status\":\"ok\"}"))
+            )
         }
 
         // Registration

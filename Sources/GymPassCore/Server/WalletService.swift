@@ -17,13 +17,13 @@ public actor WalletService {
     }
 
     private let db: DatabaseManager
-    private let keychain: KeychainStore
+    private let secrets: any SecretStore
     private let crypto: CryptoBox
     public let installLinks: InstallationLinkStore
 
-    public init(db: DatabaseManager, keychain: KeychainStore, crypto: CryptoBox) {
+    public init(db: DatabaseManager, secrets: any SecretStore = KeychainStore(), crypto: CryptoBox) {
         self.db = db
-        self.keychain = keychain
+        self.secrets = secrets
         self.crypto = crypto
         self.installLinks = InstallationLinkStore()
     }
@@ -49,16 +49,16 @@ public actor WalletService {
     /// Returns the stable per-pass authentication token, creating it if needed.
     public func ensurePassToken(serialNumber: String) async throws -> String {
         let key = KeychainStore.DynamicKey.passToken(serial: serialNumber)
-        if let existing = try await keychain.getString(key) {
+        if let existing = try await secrets.getString(key) {
             return existing
         }
         let token = SecureRandom.token(byteCount: 32)
-        try await keychain.set(token, for: key)
+        try await secrets.set(token, for: key)
         return token
     }
 
     public func passToken(serialNumber: String) async throws -> String? {
-        try await keychain.getString(KeychainStore.DynamicKey.passToken(serial: serialNumber))
+        try await secrets.getString(KeychainStore.DynamicKey.passToken(serial: serialNumber))
     }
 
     // MARK: - Publication access

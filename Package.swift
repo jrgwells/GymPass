@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "GymPassAgentCore", targets: ["GymPassAgentCore"]),
         .executable(name: "GymPassAgent", targets: ["GymPassAgent"]),
         .executable(name: "GymPassApp", targets: ["GymPassApp"]),
+        .executable(name: "GymPassTests", targets: ["GymPassTests"]),
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", exact: "2.27.0"),
@@ -50,19 +51,12 @@ let package = Package(
             dependencies: ["GymPassCore", "GymPassShared"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
-        .testTarget(
-            name: "GymPassCoreTests",
-            dependencies: ["GymPassCore", "GymPassShared"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .testTarget(
-            name: "GymPassServerTests",
-            dependencies: ["GymPassCore", "GymPassShared"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .testTarget(
-            name: "GymPassAgentTests",
-            dependencies: ["GymPassAgentCore", "GymPassCore", "GymPassShared"],
+        // A self-contained test runner. swift-testing discovery is broken when
+        // only CommandLineTools is installed, so GymPass ships a tiny harness
+        // that runs the same tests reliably with `swift run GymPassTests`.
+        .executableTarget(
+            name: "GymPassTests",
+            dependencies: ["GymPassCore", "GymPassAgentCore", "GymPassShared"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

@@ -73,6 +73,8 @@ public actor DatabaseManager {
                 CREATE TABLE IF NOT EXISTS notification_outbox (
                     id               INTEGER PRIMARY KEY AUTOINCREMENT,
                     serial_number    TEXT NOT NULL,
+                    pass_type_identifier TEXT NOT NULL,
+                    device_library_identifier TEXT NOT NULL,
                     revision         INTEGER NOT NULL,
                     push_token       BLOB NOT NULL,
                     token_generation INTEGER NOT NULL,
@@ -293,7 +295,18 @@ public actor DatabaseManager {
                 ]
             )
             for item in outbox {
-                try item.insert(db)
+                try db.execute(
+                    sql: """
+                        INSERT INTO notification_outbox
+                        (serial_number, pass_type_identifier, device_library_identifier, revision, push_token, token_generation, attempts, next_attempt_at, state, last_error)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                    arguments: [
+                        item.serialNumber, item.passTypeIdentifier, item.deviceLibraryIdentifier,
+                        item.revision, item.pushToken, item.tokenGeneration,
+                        item.attempts, item.nextAttemptAt, item.state, item.lastError,
+                    ]
+                )
             }
         }
     }

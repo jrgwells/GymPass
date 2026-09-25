@@ -11,9 +11,9 @@ public enum Redactor {
 
     private static let rules: [Rule] = {
         let raw: [(String, String)] = [
-            (#"(?i)(authorization\s*[:=]\s*)([^\s,;]+)"#, "$1<redacted>"),
             (#"(?i)(applepass\s+)([A-Za-z0-9\-._~+/]+=*)"#, "$1<redacted>"),
             (#"(?i)(bearer\s+)([A-Za-z0-9\-._~+/]+=*)"#, "$1<redacted>"),
+            (#"(?i)(authorization\s*[:=]\s*(?:(?:bearer|applepass)\s+)?)([^\s,;]+)"#, "$1<redacted>"),
             (#"(?i)(x-gympass-control-token\s*[:=]\s*)([^\s,;]+)"#, "$1<redacted>"),
             (#"exerp:checkin:[A-Za-z0-9\-_.]+"#, "exerp:checkin:<redacted>"),
             (#"(?i)("pass(token|word)"|authenticationToken|refresh_token|access_token|pushToken|installToken|pin)"\s*[:=]\s*"?[^"\s,}]+"?"#, "$1=<redacted>"),
@@ -40,8 +40,9 @@ public enum Redactor {
     /// Redacts a URL, removing query parameters and install tokens.
     public static func redact(url: URL) -> String {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let sensitiveNames: Set<String> = ["token", "passesupdatedsince", "authorization", "auth", "code"]
         let items = components?.queryItems?.map { item -> URLQueryItem in
-            let sensitive = ["token", "passesUpdatedSince", "authorization", "auth"].contains(item.name.lowercased())
+            let sensitive = sensitiveNames.contains(item.name.lowercased())
             return URLQueryItem(name: item.name, value: sensitive ? "<redacted>" : item.value)
         }
         components?.queryItems = items
