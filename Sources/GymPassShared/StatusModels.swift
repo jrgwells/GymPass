@@ -13,7 +13,7 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
     /// Short human phrase for the state, suitable for accessibility.
     public var phrase: String {
         switch self {
-        case .healthy: "Working"
+        case .healthy: "Healthy"
         case .working: "Working"
         case .waiting: "Waiting"
         case .warning: "Needs attention"
@@ -53,6 +53,8 @@ public struct StatusSnapshot: Codable, Sendable, Equatable {
     public var publicEndpoint: PublicEndpointStatus
     public var database: DatabaseStatus
     public var qr: QRStatus
+    public var preferences: AppPreferences
+    public var refreshPolicy: RefreshPolicy
 
     public init(
         generatedAt: Date = Date(),
@@ -68,7 +70,9 @@ public struct StatusSnapshot: Codable, Sendable, Equatable {
         tunnel: TunnelStatus,
         publicEndpoint: PublicEndpointStatus,
         database: DatabaseStatus,
-        qr: QRStatus
+        qr: QRStatus,
+        preferences: AppPreferences = .default,
+        refreshPolicy: RefreshPolicy = .default
     ) {
         self.generatedAt = generatedAt
         self.overall = overall
@@ -84,6 +88,8 @@ public struct StatusSnapshot: Codable, Sendable, Equatable {
         self.publicEndpoint = publicEndpoint
         self.database = database
         self.qr = qr
+        self.preferences = preferences
+        self.refreshPolicy = refreshPolicy
     }
 }
 

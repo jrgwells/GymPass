@@ -3,12 +3,21 @@ import GymPassShared
 
 struct WalletView: View {
     @Environment(AppModel.self) private var model
+
+    private struct LocationFields: Equatable {
+        var use: Bool
+        var label: String
+        var latitude: String
+        var longitude: String
+    }
+
     @State private var draft: PassAppearance = .default
+    @State private var lastSynced: PassAppearance?
     @State private var useLocation = false
     @State private var locationLabel = ""
     @State private var latitude = ""
     @State private var longitude = ""
-    @State private var loaded = false
+    @State private var lastLocation: LocationFields?
 
     var body: some View {
         ScrollView {
@@ -33,57 +42,63 @@ struct WalletView: View {
 
                 GroupCard(title: "Appearance") {
                     LabeledContent("Title") {
-                        TextField("Title", text: $draft.title).frame(width: 220)
+                        TextField("Title", text: $draft.title).frame(maxWidth: 220)
                     }
                     LabeledContent("Gym label") {
-                        TextField("Gym", text: $draft.gymLabel).frame(width: 220)
+                        TextField("Gym", text: $draft.gymLabel).frame(maxWidth: 220)
                     }
                     Toggle("Show member name", isOn: $draft.showMemberName)
-                    HStack(spacing: Spacing.xl) {
+                    WrappingActionRow(spacing: Spacing.l) {
                         ColorPicker("Pass colour", selection: colorBinding(\.backgroundHex), supportsOpacity: false)
                         ColorPicker("Text colour", selection: colorBinding(\.foregroundHex), supportsOpacity: false)
                         ColorPicker("Label colour", selection: colorBinding(\.labelHex), supportsOpacity: false)
                     }
-                    HStack {
+                    HStack(alignment: .top) {
                         Text("The exact rendering in Apple Wallet is controlled by iOS and watchOS; this is a close approximation.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Spacer()
+                        Spacer(minLength: Spacing.m)
                         Button("Apply & Regenerate") {
                             Task {
-                                await model.send(.updateAppearance(draft))
-                                await model.send(.passPreview)
+                                await model.send(.updateAppearance(draft), action: .regenerate)
+                                await model.requestPreview()
                             }
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
+                        .disabled(!hasUnsavedAppearanceEdits || model.isRegenerating)
                     }
                 }
 
                 GroupCard(title: "Location") {
                     Toggle("Surface near the gym", isOn: $useLocation)
                     if useLocation {
-                        LabeledContent("Label") { TextField("Gym", text: $locationLabel).frame(width: 220) }
-                        LabeledContent("Latitude") { TextField("51.3432", text: $latitude).frame(width: 220) }
-                        LabeledContent("Longitude") { TextField("-0.6987", text: $longitude).frame(width: 220) }
+                        LabeledContent("Label") { TextField("Gym", text: $locationLabel).frame(maxWidth: 220) }
+                        LabeledContent("Latitude") { TextField("51.3432", text: $latitude).frame(maxWidth: 220) }
+                        LabeledContent("Longitude") { TextField("-0.6987", text: $longitude).frame(maxWidth: 220) }
+                        if !locationFieldsValid {
+                            Label("Enter a label and numeric latitude and longitude.", systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
-                    HStack {
+                    HStack(alignment: .top) {
                         Text("Location relevance is optional and controlled by the system.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Spacer()
+                        Spacer(minLength: Spacing.m)
                         Button("Apply Location") {
+                            guard locationFieldsValid else { return }
                             Task {
-                                let location: PassLocation? = useLocation
-                                    ? PassLocation(label: locationLabel, latitude: Double(latitude) ?? 0, longitude: Double(longitude) ?? 0)
-                                    : nil
-                                await model.send(.updateLocation(location))
+                                await model.send(.updateLocation(useLocation ? parsedLocation : nil), action: .regenerate)
+                                lastLocation = locationFields
                             }
                         }
+                        .disabled(!locationFieldsValid || !hasUnsavedLocationEdits || model.isRegenerating)
                     }
                 }
 
                 HStack {
-                    PrimaryActionButton(title: "Regenerate Pass", systemImage: "arrow.triangle.2.circlepath", isBusy: model.busy) {
+                    PrimaryActionButton(title: "Regenerate Pass", systemImage: "arrow.triangle.2.circlepath", isBusy: model.isRegenerating) {
                         Task { await model.regeneratePass() }
                     }
                 }
@@ -93,26 +108,72 @@ struct WalletView: View {
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("Wallet")
-        .task {
-            guard !loaded else { return }
-            loaded = true
-            await model.send(.passPreview)
-            if let appearance = model.preview?.appearance ?? model.status?.wallet.appearance {
-                draft = appearance
-            }
-            if let location = model.status?.wallet.location ?? model.status?.puregym.homeGymLocation {
+        .task { syncFromModel() }
+        .onChange(of: model.preview?.revision) { _, _ in syncFromModel() }
+        .onChange(of: model.status?.wallet.revision) { _, _ in syncFromModel() }
+    }
+
+    // MARK: - Sync
+
+    private var locationFields: LocationFields {
+        LocationFields(use: useLocation, label: locationLabel, latitude: latitude, longitude: longitude)
+    }
+
+    private var hasUnsavedAppearanceEdits: Bool {
+        guard let lastSynced else { return false }
+        return draft != lastSynced
+    }
+
+    private var hasUnsavedLocationEdits: Bool {
+        guard let lastLocation else { return locationFields.use }
+        return locationFields != lastLocation
+    }
+
+    /// Syncs the editor from the agent unless the user has unsaved changes, so
+    /// their in-progress edits are never clobbered.
+    private func syncFromModel() {
+        if !hasUnsavedAppearanceEdits, let appearance = model.preview?.appearance ?? model.status?.wallet.appearance {
+            draft = appearance
+            lastSynced = appearance
+        }
+        if !hasUnsavedLocationEdits {
+            let location = model.status?.wallet.location ?? model.status?.puregym.homeGymLocation
+            if let location {
                 useLocation = true
                 locationLabel = location.label
                 latitude = String(location.latitude)
                 longitude = String(location.longitude)
+            } else {
+                useLocation = false
+                locationLabel = ""
+                latitude = ""
+                longitude = ""
             }
+            lastLocation = locationFields
         }
     }
 
+    // MARK: - Helpers
+
     private var passStateDescription: String {
         guard let status = model.status else { return "—" }
-        if status.wallet.revision == nil { return "Not generated" }
+        guard status.wallet.revision != nil else { return "Not generated" }
+        if status.qr.reportedExpiryPassed { return "Access code may have expired" }
+        if status.puregym.state == .warning { return "Updates delayed" }
+        if status.tunnel.state == .notConfigured { return "Saved — automatic updates not configured" }
         return "Up to date"
+    }
+
+    private var locationFieldsValid: Bool {
+        guard useLocation else { return true }
+        return !locationLabel.trimmingCharacters(in: .whitespaces).isEmpty
+            && Double(latitude) != nil
+            && Double(longitude) != nil
+    }
+
+    private var parsedLocation: PassLocation? {
+        guard let lat = Double(latitude), let lon = Double(longitude) else { return nil }
+        return PassLocation(label: locationLabel, latitude: lat, longitude: lon)
     }
 
     private func colorBinding(_ keyPath: WritableKeyPath<PassAppearance, String>) -> Binding<Color> {

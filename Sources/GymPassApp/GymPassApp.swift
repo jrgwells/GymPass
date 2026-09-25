@@ -13,10 +13,20 @@ struct GymPassApp: App {
                 .environment(model)
                 .task { model.start() }
         }
-        .defaultSize(width: 960, height: 680)
+        .defaultSize(width: AppModel.initialWindowSize.width, height: AppModel.initialWindowSize.height)
+        .windowResizability(.contentMinSize)
         .commands {
             SidebarCommands()
             CommandGroup(after: .sidebar) {
+                Divider()
+                Button("Dashboard") { model.selectedDestination = .dashboard }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Wallet") { model.selectedDestination = .wallet }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Activity") { model.selectedDestination = .activity }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("Diagnostics") { model.selectedDestination = .diagnostics }
+                    .keyboardShortcut("4", modifiers: .command)
                 Divider()
                 Button("Refresh Access Code") {
                     Task { await model.refreshQR() }
@@ -57,7 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var didAutoPresent = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         NavigationSplitView {
@@ -69,8 +80,9 @@ struct RootView: View {
             .listStyle(.sidebar)
         } detail: {
             detail
-                .frame(minWidth: 560, minHeight: 460)
+                .frame(minWidth: 560, minHeight: 520)
         }
+        .frame(minWidth: AppModel.minimumWindowSize.width, minHeight: AppModel.minimumWindowSize.height)
         .navigationTitle("GymPass")
         .sheet(isPresented: Binding(get: { model.showingOnboarding }, set: { model.showingOnboarding = $0 })) {
             OnboardingView()
@@ -78,17 +90,24 @@ struct RootView: View {
         }
         .overlay(alignment: .bottom) {
             if let banner = model.banner {
-                InlineBanner(message: banner)
+                InlineBanner(message: banner, onDismiss: { model.dismissBanner() })
                     .padding(Spacing.l)
                     .frame(maxWidth: 520)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .task {
-            await model.refreshAll()
-            if !didAutoPresent, model.needsOnboarding {
-                didAutoPresent = true
+            if !model.hasAutoPresentedOnboarding, model.status == nil {
+                await model.refreshAll()
+            }
+            if !model.hasAutoPresentedOnboarding, model.needsOnboarding {
+                model.hasAutoPresentedOnboarding = true
+                model.onboardingStartStep = 0
                 model.showingOnboarding = true
+            }
+            if ProcessInfo.processInfo.environment["GYMPASS_OPEN_SETTINGS"] == "1" {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                openSettings()
             }
         }
     }

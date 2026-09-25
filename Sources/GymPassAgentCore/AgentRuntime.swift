@@ -495,7 +495,9 @@ public actor AgentRuntime {
             tunnel: tunnelStatus,
             publicEndpoint: publicEndpoint,
             database: databaseStatus,
-            qr: qrStatus
+            qr: qrStatus,
+            preferences: config.preferences,
+            refreshPolicy: config.policy
         )
     }
 

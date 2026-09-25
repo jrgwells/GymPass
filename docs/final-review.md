@@ -97,6 +97,34 @@ packaged `.app` was launched and quit successfully.
 | Cloudflare named tunnel | **Blocked by: domain/account**; Quick Tunnel usable for local testing |
 | Screen-locked Keychain access | **Requires human verification** on an always-on Mac |
 
+## UI review pass
+
+A follow-up audit of the SwiftUI layer fixed:
+
+- Activity empty state was rendered as a list row instead of centred.
+- Wallet/Connectivity/General editors captured agent state once at first
+  appearance; they now resync and never clobber unsaved edits.
+- The hero QR could go stale after a refresh; the preview now refreshes with the
+  published revision.
+- The banner never dismissed, never animated and could appear for passive
+  requests; it now auto-dismisses, animates (respecting Reduce Motion) and has a
+  dismiss control.
+- A single global busy flag made unrelated buttons spin; busy state is now
+  per-action.
+- Narrow windows overflowed: Membership/Services, action rows, colour pickers
+  and fixed label columns are now adaptive (`ViewThatFits`, a wrapping layout
+  and flexible minima). The window has a real 760×560 minimum.
+- Onboarding is centred, resizable and dismissible (Close + Skip).
+- Expired/missing certificates and unconfigured updates now offer actions.
+- Wallet pass status is truthful ("Saved — automatic updates not configured",
+  "Access code may have expired") and location input is validated.
+- Settings reflects the agent's real preferences and refresh policy; the
+  background-service toggle reflects approval state; certificate and credential
+  errors show inline in their sheets.
+- Dead code removed; icon-only buttons labelled; `⌘1`–`⌘4` shortcuts added.
+
+Verified with packaged-app window captures at 760 and 1180 points.
+
 ## Known limitations
 
 - Apple Wallet rendering is controlled by iOS/watchOS; the in-app preview is an

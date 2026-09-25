@@ -5,9 +5,11 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var step = 0
+    @State private var didSetStartStep = false
     @State private var email = ""
     @State private var pin = ""
     @State private var connecting = false
+    @State private var connectError: String?
     @State private var hostname = ""
     @State private var token = ""
     @State private var link: InstallLink?
@@ -16,23 +18,39 @@ struct OnboardingView: View {
     private let stepTitles = ["Welcome", "PureGym", "Apple Wallet", "Automatic Updates", "Ready"]
 
     var body: some View {
-        VStack(spacing: Spacing.xl) {
+        VStack(spacing: Spacing.l) {
+            header
             progressIndicator
-            Group {
-                switch step {
-                case 0: welcomeStep
-                case 1: pureGymStep
-                case 2: walletStep
-                case 3: remoteStep
-                default: readyStep
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            stepContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             footer
         }
         .padding(Spacing.xxl)
-        .frame(width: 560, height: 520)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 480, idealHeight: 540)
+        .onAppear {
+            guard !didSetStartStep else { return }
+            didSetStartStep = true
+            step = min(max(model.onboardingStartStep, 0), stepTitles.count - 1)
+        }
         .sheet(isPresented: $showingCertificateImport) { CertificateImportSheet() }
+    }
+
+    private var header: some View {
+        HStack {
+            Text(stepTitles[step])
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                model.showingOnboarding = false
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close setup")
+            .help("Close setup")
+        }
     }
 
     private var progressIndicator: some View {
@@ -44,6 +62,17 @@ struct OnboardingView: View {
             }
         }
         .accessibilityLabel("Step \(step + 1) of \(stepTitles.count): \(stepTitles[step])")
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case 0: welcomeStep
+        case 1: pureGymStep
+        case 2: walletStep
+        case 3: remoteStep
+        default: readyStep
+        }
     }
 
     private var welcomeStep: some View {
@@ -61,6 +90,7 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 400)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var pureGymStep: some View {
@@ -68,28 +98,41 @@ struct OnboardingView: View {
             Text("Connect your membership so GymPass can retrieve your current access code.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             TextField("Email", text: $email)
             SecureField("PIN", text: $pin)
             Text("Credentials are stored securely in your Mac's Keychain.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let connectError {
+                Label(connectError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if model.status?.puregym.authenticationValid == true {
                 StatusLabel(state: .healthy, text: "Connected — \(model.status?.puregym.homeGym ?? "PureGym")")
             }
-            Button {
-                connecting = true
-                Task {
-                    await model.send(.setPureGymCredentials(email: email, pin: pin))
-                    connecting = false
+            HStack {
+                if connecting { ProgressView().controlSize(.small) }
+                Button("Connect") {
+                    connecting = true
+                    connectError = nil
+                    Task {
+                        let response = await model.send(.setPureGymCredentials(email: email, pin: pin), silentOnFailure: true)
+                        connecting = false
+                        if case .failure(let payload) = response {
+                            connectError = payload.message
+                        }
+                    }
                 }
-            } label: {
-                if connecting { ProgressView().controlSize(.small) } else { Text("Connect") }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .disabled(email.isEmpty || pin.isEmpty || connecting)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .disabled(email.isEmpty || pin.isEmpty || connecting)
         }
         .textFieldStyle(.roundedBorder)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var walletStep: some View {
@@ -108,6 +151,7 @@ struct OnboardingView: View {
                     .tint(Theme.accent)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var remoteStep: some View {
@@ -134,6 +178,7 @@ struct OnboardingView: View {
                 StatusLabel(state: .notConfigured, text: "Not set up yet")
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var readyStep: some View {
@@ -159,8 +204,14 @@ struct OnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
                 .disabled(model.status?.signing.state != .healthy)
+                if model.status?.signing.state != .healthy {
+                    Text("A signing certificate is required before a pass can be installed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var footer: some View {
@@ -168,8 +219,14 @@ struct OnboardingView: View {
             if step > 0 {
                 Button("Back") { step -= 1 }
             }
+            Button("Skip Setup") {
+                model.showingOnboarding = false
+                dismiss()
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
             Spacer()
-            if step < 4 {
+            if step < stepTitles.count - 1 {
                 Button(step == 0 ? "Get Started" : "Continue") { step += 1 }
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)

@@ -98,7 +98,7 @@ public struct InstallLink: Codable, Sendable, Equatable {
 }
 
 public enum AgentProtocol {
-    public static let version = 1
+    public static let version = 2
     public static let controlTokenHeader = "X-GymPass-Control-Token"
     public static let statusPath = "/control/status"
     public static let requestPath = "/control/request"

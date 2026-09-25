@@ -5,31 +5,37 @@ struct ActivityView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List {
+        Group {
             if model.activity.isEmpty {
-                ContentUnavailableView("No activity yet", systemImage: "clock.arrow.circlepath", description: Text("GymPass will record refresh, pass and notification events here."))
-            }
-            ForEach(groups) { group in
-                Section(group.title) {
-                    ForEach(group.events) { event in
-                        ActivityRow(event: event)
+                EmptyStateView(
+                    title: "No activity yet",
+                    systemImage: "clock.arrow.circlepath",
+                    message: "GymPass will record refresh, pass and notification events here."
+                )
+            } else {
+                List {
+                    ForEach(groups) { group in
+                        Section(group.title) {
+                            ForEach(group.events) { event in
+                                ActivityRow(event: event)
+                            }
+                        }
                     }
                 }
+                .listStyle(.inset)
             }
         }
-        .listStyle(.inset)
         .navigationTitle("Activity")
     }
 
-    private struct Group: Identifiable {
+    private struct ActivityGroup: Identifiable {
         let id: String
         let title: String
         let events: [ActivityEvent]
     }
 
-    private var groups: [Group] {
+    private var groups: [ActivityGroup] {
         let calendar = Calendar.current
-        let now = Date()
         var today: [ActivityEvent] = []
         var yesterday: [ActivityEvent] = []
         var earlier: [ActivityEvent] = []
@@ -42,11 +48,10 @@ struct ActivityView: View {
                 earlier.append(event)
             }
         }
-        _ = now
-        var result: [Group] = []
-        if !today.isEmpty { result.append(Group(id: "today", title: "Today", events: today)) }
-        if !yesterday.isEmpty { result.append(Group(id: "yesterday", title: "Yesterday", events: yesterday)) }
-        if !earlier.isEmpty { result.append(Group(id: "earlier", title: "Earlier", events: earlier)) }
+        var result: [ActivityGroup] = []
+        if !today.isEmpty { result.append(ActivityGroup(id: "today", title: "Today", events: today)) }
+        if !yesterday.isEmpty { result.append(ActivityGroup(id: "yesterday", title: "Yesterday", events: yesterday)) }
+        if !earlier.isEmpty { result.append(ActivityGroup(id: "earlier", title: "Earlier", events: earlier)) }
         return result
     }
 }

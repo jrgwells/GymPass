@@ -1,8 +1,10 @@
 import SwiftUI
+import AppKit
 import GymPassShared
 
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
     @State private var installLink: InstallLink?
     @State private var showingInstall = false
 
@@ -11,8 +13,9 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: Spacing.section) {
                 overallHeader
                 passHero
-                HStack(alignment: .top, spacing: Spacing.section) {
+                AdaptivePair {
                     membership
+                } second: {
                     services
                 }
                 actions
@@ -30,11 +33,10 @@ struct DashboardView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Refresh the access code (⌘R)")
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(model.busy)
+                .accessibilityLabel("Refresh access code")
+                .disabled(model.isRefreshing)
             }
         }
-        .task { await model.send(.passPreview) }
         .sheet(isPresented: $showingInstall) {
             if let installLink {
                 InstallPassSheet(link: installLink)
@@ -54,22 +56,44 @@ struct DashboardView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            headerAction
+                .padding(.top, Spacing.xs)
+        }
+    }
 
-            if !model.agentReachable {
-                PrimaryActionButton(title: "Install Background Service", systemImage: "gearshape") {
-                    Task { await model.installAgent() }
-                }
-                .padding(.top, Spacing.s)
-            } else if let status = model.status, status.overall == .setup {
-                if status.signing.state == .notConfigured {
-                    Button("Open Setup…") { model.showingOnboarding = true }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.accent)
+    @ViewBuilder
+    private var headerAction: some View {
+        if !model.agentReachable {
+            PrimaryActionButton(title: "Install Background Service", systemImage: "gearshape", isBusy: model.isInstalling) {
+                Task { await model.installAgent() }
+            }
+        } else if let status = model.status {
+            switch status.overall {
+            case .setup:
+                if status.signing.state != .healthy {
+                    Button("Manage Certificate…") {
+                        model.settingsTab = .wallet
+                        openSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
                 } else if status.puregym.accountEmail == nil {
-                    Button("Connect PureGym…") { model.showingOnboarding = true }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.accent)
+                    Button("Connect PureGym…") {
+                        model.onboardingStartStep = 1
+                        model.showingOnboarding = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
                 }
+            case .attention:
+                Button("Review Setup…") {
+                    model.onboardingStartStep = 0
+                    model.showingOnboarding = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+            default:
+                EmptyView()
             }
         }
     }
@@ -117,8 +141,8 @@ struct DashboardView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: Spacing.m) {
-            PrimaryActionButton(title: "Refresh Now", systemImage: "arrow.clockwise", isBusy: model.busy) {
+        WrappingActionRow {
+            PrimaryActionButton(title: "Refresh Now", systemImage: "arrow.clockwise", isBusy: model.isRefreshing) {
                 Task { await model.refreshQR() }
             }
             Button("Regenerate Pass") { Task { await model.regeneratePass() } }

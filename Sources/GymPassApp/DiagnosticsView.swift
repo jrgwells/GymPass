@@ -26,7 +26,7 @@ struct DiagnosticsView: View {
                     }
                 } else {
                     GroupCard(title: "Overall Health") {
-                        StatusLabel(state: model.status?.overall == .healthy ? .healthy : (model.status?.overall == .attention ? .warning : .inactive), text: model.status?.overallTitle ?? "Unknown")
+                        StatusLabel(state: fallbackOverall, text: model.status?.overallTitle ?? "Unknown")
                             .font(.headline)
                     }
                 }
@@ -75,16 +75,16 @@ struct DiagnosticsView: View {
 
     private var actions: some View {
         GroupCard(title: "Actions") {
-            HStack(spacing: Spacing.m) {
-                PrimaryActionButton(title: "Run Full Diagnostic", systemImage: "stethoscope", isBusy: running || model.busy) {
+            WrappingActionRow {
+                PrimaryActionButton(title: "Run Full Diagnostic", systemImage: "stethoscope", isBusy: running) {
                     Task { await run(.full) }
                 }
-                Button("Test PureGym") { Task { await run(.puregym) } }
-                Button("Test Signing") { Task { await run(.signing) } }
-                Button("Test Apple Push") { Task { await run(.apns) } }
-                Button("Test Remote Access") { Task { await run(.publicEndpoint) } }
+                Button("Test PureGym") { Task { await run(.puregym) } }.disabled(running)
+                Button("Test Signing") { Task { await run(.signing) } }.disabled(running)
+                Button("Test Apple Push") { Task { await run(.apns) } }.disabled(running)
+                Button("Test Remote Access") { Task { await run(.publicEndpoint) } }.disabled(running)
             }
-            HStack(spacing: Spacing.m) {
+            WrappingActionRow {
                 Button("Restart Background Service") { Task { await model.restartAgent() } }
                 Button("Export Diagnostics") {
                     Task {
@@ -98,10 +98,21 @@ struct DiagnosticsView: View {
         }
     }
 
+    private var fallbackOverall: ServiceState {
+        switch model.status?.overall {
+        case .healthy: .healthy
+        case .attention: .warning
+        case .setup: .notConfigured
+        case .unavailable: .unavailable
+        case nil: .inactive
+        }
+    }
+
     private func run(_ kind: DiagnosticKind) async {
         running = true
+        report = nil
         defer { running = false }
-        let response = await model.send(.runDiagnostic(kind))
+        let response = await model.send(.runDiagnostic(kind), action: .diagnose)
         if case .diagnostic(let report) = response {
             self.report = report
         }

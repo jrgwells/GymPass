@@ -40,7 +40,7 @@ struct StatePresentation {
     init(_ state: ServiceState) {
         switch state {
         case .healthy:
-            symbol = "checkmark.circle.fill"; color = .green; label = "Working"
+            symbol = "checkmark.circle.fill"; color = .green; label = "Healthy"
         case .working:
             symbol = "arrow.triangle.2.circlepath"; color = Theme.accent; label = "Working"
         case .waiting:
@@ -74,17 +74,6 @@ struct StatusLabel: View {
     }
 }
 
-struct SectionHeader: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .font(.headline)
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct ServiceRow: View {
     let name: String
     let state: ServiceState
@@ -94,7 +83,8 @@ struct ServiceRow: View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
             Text(name)
                 .font(.subheadline)
-                .frame(width: 170, alignment: .leading)
+                .lineLimit(1)
+                .frame(minWidth: 0, idealWidth: 150, maxWidth: 170, alignment: .leading)
             StatusLabel(state: state, text: detail)
                 .font(.subheadline)
             Spacer(minLength: 0)

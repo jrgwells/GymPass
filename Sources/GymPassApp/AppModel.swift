@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import GymPassCore
 import GymPassShared
 
@@ -29,19 +30,31 @@ enum SidebarDestination: String, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class AppModel {
+    enum BusyAction: Hashable {
+        case refresh, regenerate, diagnose, install, preview
+    }
+
+    enum SettingsTab: String, Hashable {
+        case general, puregym, wallet, connectivity, advanced
+    }
+
     var status: StatusSnapshot?
     var activity: [ActivityEvent] = []
     var agentReachable = false
     var agentInstallation: AgentInstallationStatus = .notInstalled
     var selectedDestination: SidebarDestination? = .dashboard
     var showingOnboarding = false
-    var lastProblem: String?
+    var onboardingStartStep = 0
+    var hasAutoPresentedOnboarding = false
+    var settingsTab: SettingsTab = .general
     var banner: BannerMessage?
-    var busy: Bool = false
     var lastRefreshSucceeded: Date?
     var preview: PassPreview?
 
+    private var inFlight: Set<BusyAction> = []
     private var pollTask: Task<Void, Never>?
+    private var bannerTask: Task<Void, Never>?
+    private var lastPreviewRevision: Int?
     private let installer: AgentInstaller
 
     struct BannerMessage: Identifiable {
@@ -52,6 +65,43 @@ final class AppModel {
 
     init() {
         installer = AgentInstaller(executablePath: Self.agentExecutablePath())
+        applyLaunchOverrides()
+    }
+
+    /// Developer/UI-testing affordances. These only act when the corresponding
+    /// environment variables are set (see docs/development.md) and never alter
+    /// normal launch behaviour.
+    private func applyLaunchOverrides() {
+        let environment = ProcessInfo.processInfo.environment
+        if let raw = environment["GYMPASS_START_DESTINATION"],
+           let destination = SidebarDestination(rawValue: raw) {
+            selectedDestination = destination
+        }
+        if environment["GYMPASS_SHOW_ONBOARDING"] == "1" {
+            showingOnboarding = true
+            hasAutoPresentedOnboarding = true
+        }
+        if let raw = environment["GYMPASS_SETTINGS_TAB"], let tab = SettingsTab(rawValue: raw) {
+            settingsTab = tab
+        }
+    }
+
+    static var initialWindowSize: CGSize {
+        let environment = ProcessInfo.processInfo.environment
+        let width = environment["GYMPASS_WINDOW_WIDTH"].flatMap(Double.init) ?? 960
+        let height = environment["GYMPASS_WINDOW_HEIGHT"].flatMap(Double.init) ?? 680
+        let clampedWidth = min(max(width, 760), 1600)
+        let clampedHeight = min(max(height, 560), 1100)
+        return CGSize(width: clampedWidth, height: clampedHeight)
+    }
+
+    /// The declared minimum window size. `GYMPASS_WINDOW_WIDTH`/`HEIGHT` also
+    /// raise the minimum so UI-testing captures can force a wide window.
+    static var minimumWindowSize: CGSize {
+        let environment = ProcessInfo.processInfo.environment
+        let width = environment["GYMPASS_WINDOW_WIDTH"].flatMap(Double.init) ?? 760
+        let height = environment["GYMPASS_WINDOW_HEIGHT"].flatMap(Double.init) ?? 560
+        return CGSize(width: min(max(width, 760), 1600), height: min(max(height, 560), 1100))
     }
 
     static func agentExecutablePath() -> String {
@@ -59,12 +109,20 @@ final class AppModel {
         return executable.deletingLastPathComponent().appendingPathComponent("GymPassAgent").path
     }
 
+    // MARK: - Derived state
+
     var needsOnboarding: Bool {
         guard let status else { return false }
         if status.puregym.accountEmail == nil { return true }
         if status.signing.state == .notConfigured { return true }
         return false
     }
+
+    func isBusy(_ action: BusyAction) -> Bool { inFlight.contains(action) }
+    var isRefreshing: Bool { isBusy(.refresh) }
+    var isRegenerating: Bool { isBusy(.regenerate) }
+    var isDiagnosing: Bool { isBusy(.diagnose) }
+    var isInstalling: Bool { isBusy(.install) }
 
     var menuBarSymbol: String {
         guard agentReachable, let status else { return "wallet.pass" }
@@ -75,6 +133,8 @@ final class AppModel {
         case .unavailable: return "xmark.circle"
         }
     }
+
+    // MARK: - Polling
 
     func start() {
         guard pollTask == nil else { return }
@@ -100,48 +160,62 @@ final class AppModel {
         do {
             async let status = client.status()
             async let activity = client.activity(limit: 100)
-            self.status = try await status
+            let snapshot = try await status
             self.activity = try await activity
+            self.status = snapshot
             agentReachable = true
             lastRefreshSucceeded = Date()
+            if let revision = snapshot.wallet.revision, revision != lastPreviewRevision {
+                await requestPreview()
+            }
         } catch {
             agentReachable = false
         }
     }
 
+    // MARK: - Requests
+
     @discardableResult
-    func send(_ request: AgentRequest) async -> AgentResponse {
-        busy = true
-        defer { busy = false }
+    func send(_ request: AgentRequest, action: BusyAction? = nil, silentOnFailure: Bool = false) async -> AgentResponse {
+        if let action { inFlight.insert(action) }
+        defer { if let action { inFlight.remove(action) } }
+
         guard let client = AgentClient.discover() else {
-            lastProblem = "The background service is not running."
-            banner = BannerMessage(text: "The background service is not running.", isError: true)
+            if !silentOnFailure {
+                showBanner("The background service is not running.", isError: true)
+            }
             return .failure(AgentErrorPayload(code: "agent_unreachable", message: "The background service is not running."))
         }
         do {
             let response = try await client.send(request)
-            apply(response)
+            apply(response, silentOnFailure: silentOnFailure)
             return response
         } catch {
-            lastProblem = "GymPass could not reach the background service."
+            if !silentOnFailure {
+                showBanner("GymPass could not reach the background service.", isError: true)
+            }
             return .failure(AgentErrorPayload(code: "agent_unreachable", message: "GymPass could not reach the background service."))
         }
     }
 
-    private func apply(_ response: AgentResponse) {
+    private func apply(_ response: AgentResponse, silentOnFailure: Bool) {
         switch response {
         case .status(let snapshot):
             status = snapshot
+            if let revision = snapshot.wallet.revision, revision != lastPreviewRevision {
+                Task { await requestPreview() }
+            }
         case .activity(let events):
             activity = events
         case .failure(let payload):
-            banner = BannerMessage(text: payload.message, isError: true)
+            if !silentOnFailure { showBanner(payload.message, isError: true) }
         case .text(let message):
-            banner = BannerMessage(text: message, isError: false)
-        case .installLink(let link):
-            banner = BannerMessage(text: "Installation link ready for \(link.expiresAt.formatted(date: .omitted, time: .shortened)).", isError: false)
+            showBanner(message, isError: false)
+        case .installLink:
+            break // The caller presents the installation sheet.
         case .passPreview(let preview):
             self.preview = preview
+            lastPreviewRevision = preview.revision
         case .diagnostic:
             break
         case .ok:
@@ -149,26 +223,68 @@ final class AppModel {
         }
     }
 
+    func requestPreview() async {
+        inFlight.insert(.preview)
+        defer { inFlight.remove(.preview) }
+        guard let client = AgentClient.discover() else { return }
+        guard let response = try? await client.send(.passPreview),
+              case .passPreview(let preview) = response else { return }
+        self.preview = preview
+        lastPreviewRevision = preview.revision
+    }
+
+    // MARK: - Banner
+
+    func showBanner(_ text: String, isError: Bool) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            banner = BannerMessage(text: text, isError: isError)
+        }
+        bannerTask?.cancel()
+        bannerTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.dismissBanner()
+        }
+    }
+
+    func dismissBanner() {
+        bannerTask?.cancel()
+        bannerTask = nil
+        withAnimation(.easeInOut(duration: 0.2)) {
+            banner = nil
+        }
+    }
+
     // MARK: - Convenience actions
 
     func refreshQR() async {
-        await send(.refreshQR)
+        await send(.refreshQR, action: .refresh)
+        await requestPreview()
     }
 
     func regeneratePass() async {
-        await send(.regeneratePass)
+        await send(.regeneratePass, action: .regenerate)
+        await requestPreview()
     }
 
     func testServices() async {
-        await send(.runDiagnostic(.full))
+        let response = await send(.runDiagnostic(.full), action: .diagnose, silentOnFailure: true)
+        if case .diagnostic(let report) = response {
+            showBanner(
+                report.overall == .healthy ? "All services responded normally." : "Some services need attention. See Diagnostics.",
+                isError: report.overall != .healthy
+            )
+        }
     }
 
     func installAgent() async {
+        inFlight.insert(.install)
+        defer { inFlight.remove(.install) }
         do {
             try await installer.install()
-            banner = BannerMessage(text: "The background service is starting.", isError: false)
+            showBanner("The background service is starting.", isError: false)
         } catch {
-            banner = BannerMessage(text: (error as? GymPassError)?.userMessage ?? "The background service could not be installed.", isError: true)
+            showBanner((error as? GymPassError)?.userMessage ?? "The background service could not be installed.", isError: true)
         }
         await refreshAll()
     }
