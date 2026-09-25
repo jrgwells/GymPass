@@ -24,7 +24,33 @@ public enum AgentRequest: Codable, Sendable, Equatable {
     case resetPass
     case exportDiagnostics
     case listActivity(limit: Int)
+    case passPreview
     case ping
+}
+
+/// A local-only preview payload. It contains the current access code so the GUI
+/// can render an accurate preview. It is only ever sent over the loopback
+/// control channel and is never logged or persisted.
+public struct PassPreview: Codable, Sendable, Equatable {
+    public var qrPayload: String
+    public var serialNumber: String
+    public var passTypeIdentifier: String
+    public var memberName: String?
+    public var gymLabel: String
+    public var appearance: PassAppearance
+    public var revision: Int
+    public var updatedAt: Date
+
+    public init(qrPayload: String, serialNumber: String, passTypeIdentifier: String, memberName: String?, gymLabel: String, appearance: PassAppearance, revision: Int, updatedAt: Date) {
+        self.qrPayload = qrPayload
+        self.serialNumber = serialNumber
+        self.passTypeIdentifier = passTypeIdentifier
+        self.memberName = memberName
+        self.gymLabel = gymLabel
+        self.appearance = appearance
+        self.revision = revision
+        self.updatedAt = updatedAt
+    }
 }
 
 public enum AgentResponse: Codable, Sendable, Equatable {
@@ -33,6 +59,7 @@ public enum AgentResponse: Codable, Sendable, Equatable {
     case activity([ActivityEvent])
     case diagnostic(DiagnosticReport)
     case installLink(InstallLink)
+    case passPreview(PassPreview)
     case text(String)
     case failure(AgentErrorPayload)
 

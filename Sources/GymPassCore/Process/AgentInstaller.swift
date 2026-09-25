@@ -1,5 +1,4 @@
 import Foundation
-import GymPassCore
 import GymPassShared
 
 /// Installs and supervises the background agent.
@@ -62,7 +61,12 @@ public actor AgentInstaller {
         Log.agent.info("Background agent uninstalled")
     }
 
-    public func openApprovalSettings() {
+    public func restart() async {
+        _ = await Shell.run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(Self.label)"])
+        Log.agent.info("Background agent restart requested")
+    }
+
+    public nonisolated func openApprovalSettings() {
         Shell.runDetached("/usr/bin/open", ["x-apple.systempreferences:com.apple.LoginItems-Settings.extension"])
     }
 

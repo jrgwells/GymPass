@@ -70,7 +70,32 @@ extension AgentRuntime {
             return .status(await statusSnapshot())
         case .listActivity(let limit):
             return .activity(await activity.recent(limit: limit))
+        case .passPreview:
+            return await passPreview()
         }
+    }
+
+    private func passPreview() async -> AgentResponse {
+        guard let qrState = try? await database.qrState(),
+              let ciphertext = qrState.qrCiphertext,
+              let code = try? crypto.openString(ciphertext) else {
+            return .failure(AgentErrorPayload(code: "no_qr", message: "No access code has been retrieved yet."))
+        }
+        guard let identity = await currentPassIdentity(),
+              let passState = try? await database.passState(serialNumber: identity.serialNumber) else {
+            return .failure(AgentErrorPayload(code: "no_pass", message: "No Wallet pass has been generated yet."))
+        }
+        let preview = PassPreview(
+            qrPayload: code,
+            serialNumber: identity.serialNumber,
+            passTypeIdentifier: identity.passTypeIdentifier,
+            memberName: config.appearance.memberName,
+            gymLabel: config.appearance.gymLabel,
+            appearance: config.appearance,
+            revision: passState.revision,
+            updatedAt: passState.publishedAt
+        )
+        return .passPreview(preview)
     }
 
     // MARK: - PureGym
