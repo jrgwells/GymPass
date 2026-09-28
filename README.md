@@ -21,8 +21,20 @@ GymPass quietly keeps your PureGym access code up to date in **Apple Wallet**, o
 
 ---
 
+> [!WARNING]
+> **A paid Apple Developer account is required for a working pass on a real device.**
+> Apple only lets Wallet install passes signed by a certificate tied to **your** Apple
+> Developer Program membership (a **Pass Type ID certificate**, ~**99 USD/year**). Without
+> it GymPass still builds, signs and verifies passes with a bundled test identity, but the
+> pass will **not install on your iPhone or Apple Watch**. See
+> [Prerequisites → Apple Developer account](#1-an-apple-developer-account-required-for-a-real-pass-)
+> and [`docs/wallet-setup.md`](docs/wallet-setup.md).
+
+---
+
 ## Contents
 
+- [Why GymPass](#why-gympass)
 - [What it does](#what-it-does)
 - [How it works (in plain English)](#how-it-works-in-plain-english)
 - [Screenshots](#screenshots)
@@ -36,6 +48,27 @@ GymPass quietly keeps your PureGym access code up to date in **Apple Wallet**, o
 - [Known limitations](#known-limitations)
 - [Documentation](#documentation)
 - [Disclaimer](#disclaimer)
+
+---
+
+## Why GymPass
+
+The PureGym app is the obvious place to get your entry code, but it is **painfully slow**:
+cold starts, a splash screen, a sign-in, and a few taps just to reach a QR code. Extra
+friction at the turnstile, every single visit.
+
+Worse, the code it shows is **not static**. PureGym generates a **dynamic QR code that
+changes roughly every 60 seconds**. That rules out the usual shortcut of screenshotting a
+code or saving one as a static image — by the time you reach the scanner, it may already be
+expired.
+
+GymPass solves both problems by keeping a **fresh, live code inside Apple Wallet**, where it
+is one gesture away on your iPhone or Apple Watch and updates itself in the background.
+
+This project was **heavily influenced by** Drobinin's write-up,
+[*How I accidentally became PureGym's unofficial Apple Wallet developer*](https://drobinin.com/posts/how-i-accidentally-became-puregyms-unofficial-apple-wallet-developer/),
+which documented the same problem and the Wallet-based approach. GymPass is an independent
+implementation inspired by that work.
 
 ---
 
